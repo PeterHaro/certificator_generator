@@ -20,13 +20,6 @@ class CertificateCreator(object):
     CA_NEW_CERTS_PATH = "CA/newcerts"
     CA_PRIVATE_PATH = "CA/private"
     CA_INTERMEDIATE_PATH = "CA/intermediate"
-    """
-            CA_INTERMEDIATE_CERTS_PATH = self.CA_INTERMEDIATE_PATH + "/certs"
-            CA_INTERMEDIATE__CRL_PATH = self.CA_INTERMEDIATE_PATH + "/crl"
-            CA_INTERMEDIATE_CSR_PATH = self.CA_INTERMEDIATE_PATH + "/csr"
-            CA_INTERMEDIATE_NEWCERTS_PATH = self.CA_INTERMEDIATE_PATH + "/newcerts"
-            CA_INTERMEDIATE_PRIVATE_PATH = self.CA_INTERMEDIATE_PATH + "/private"
-    """
 
     def __init__(self):
         # logging
@@ -162,6 +155,10 @@ class CertificateCreator(object):
     def perform_intermediate_certificate_generation(self):
         for intermediate_certificate_name in self.intermediate_ca_names:
             self.generate_intermediate_key_parameters(intermediate_certificate_name)
+            self.dump_ecdsa_intermediate_key_parameters(intermediate_certificate_name)
+            self.generate_intermediate_key(intermediate_certificate_name)
+
+
 
     def dump_ecdsa_intermediate_key_parameters(self, name):
         self.l.info("Entering dump_intermediate_ecdsa_parameters")
@@ -176,9 +173,21 @@ class CertificateCreator(object):
 
     def generate_intermediate_key(self, name):
         self.l.info("Generating a key pair for INTERMEDIATE: " + name)
-        self.execute_command(self.CA_generate_keys_command)
-        self.l.info("Listing key file")
-        self.execute_command(self.list_key_file_command)
+        intermediate_private_path = self.CA_INTERMEDIATE_PATH + "/" + name + "/private/"
+
+        generate_intermediate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + intermediate_private_path + "/cakey.pem -genkey -name secp384r1 -noout"
+        dump_intermediate_keys_command = CA_OPENSSL_PATH + " ec -in " + intermediate_private_path + "/cakey.pem -text -noout"
+        self.execute_command(generate_intermediate_keys_command)
+        self.l.info("Listing key file for: " + name)
+        self.execute_command(dump_intermediate_keys_command)
+
+    def generate_interemediate_certificate(self, name):
+        self.l.info("Generating intermediate certificate")
+        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.CA_PRIVATE_PATH + "/cakey.pem -config CA/openssl.cnf " + \
+                                            "-days " + str(
+            CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.CA_PRIVATE_PATH + "/cacert.pem -outform PEM"
+
+        self.execute_command(self.generate_certificate_command)
 
 if __name__ == "__main__":
     certificate_manager = CertificateCreator()
