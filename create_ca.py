@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 import subprocess
-import time
-
 import sys
+import time
 
 from ca_config import *
 from logger import Logger
 from utility import create_folder_if_not_exists, find_between
 
-
+# TODO : IMplement CA CHAINING: cat CA/intermediate/sub-ca-air/certs/intermediate.cert.pem CA/private/cacert.pem > CA/intermediate/sub-ca-air/certs/ca-chain.cert.pem
 class CertificateCreator(object):
     TMP = "./log"
     LOG_FILENAME = TMP + "/%s_%d.log" % (time.strftime("%Y%m%d_%H%M%S"), os.getpid())
@@ -20,6 +19,11 @@ class CertificateCreator(object):
     CA_NEW_CERTS_PATH = "CA/newcerts"
     CA_PRIVATE_PATH = "CA/private"
     CA_INTERMEDIATE_PATH = "CA/intermediate"
+    CA_INTERMEDIATE_PATH_PRIVATE = "CA/intermediate/private"
+    CA_USER_PATH = "CA/final_user_certificates"
+    SUB_CA_AIR_IDX = 0
+    AIR_CA_PATH = "CA/intermediate/sub-ca-air/"
+    AIR_CA_PAT_PRIVATE = "CA/intermediate/sub-ca-air/private/"
 
     def __init__(self):
         # logging
@@ -44,17 +48,6 @@ class CertificateCreator(object):
 
         # Intermediate parameters
         self.intermediate_ca_names = ["sub-ca-air", "sub-ca-gnd"]
-        # self.intermediate_ECDSA_parameters_command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.CA_INTERMEDIATE_PRIVATE_PATH + "/curve_secp384r1.pem"
-        self.ECDSA_dump_parameters = CA_OPENSSL_PATH + " ecparam -in " + self.CA_PRIVATE_PATH + "/curve_secp384r1.pem -text -param_enc explicit -noout"
-        self.CA_generate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.CA_PRIVATE_PATH + "/cakey.pem -genkey -name secp384r1 -noout"
-        self.list_key_file_command = CA_OPENSSL_PATH + " ec -in " + self.CA_PRIVATE_PATH + "/cakey.pem -text -noout"
-        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.CA_PRIVATE_PATH + "/cakey.pem -config CA/openssl.cnf " + \
-                                            "-days " + str(
-            CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.CA_PRIVATE_PATH + "/cacert.pem -outform PEM"
-        self.test_certificate_command = CA_OPENSSL_PATH + " x509 -purpose -in " + self.CA_PRIVATE_PATH + "/cacert.pem -inform PEM"
-        self.convert_certificate_to_der_command = CA_OPENSSL_PATH + " x509 -in " + self.CA_PRIVATE_PATH + "/cacert.pem -out " + self.CA_PRIVATE_PATH + "/cacert.der -outform DER"
-        self.dump_ca_certificate_command = CA_OPENSSL_PATH + " x509 -in " + self.CA_PRIVATE_PATH + "/cacert.der -inform DER -text -noout"
-
         self.lastOperationOutput = None
 
         # Create file structures
@@ -157,38 +150,98 @@ class CertificateCreator(object):
             self.generate_intermediate_key_parameters(intermediate_certificate_name)
             self.dump_ecdsa_intermediate_key_parameters(intermediate_certificate_name)
             self.generate_intermediate_key(intermediate_certificate_name)
+            self.generate_interemediate_certificate_csr(intermediate_certificate_name)
+            self.generate_intermediate_certificate(intermediate_certificate_name)
+            self.verify_intermediate_certificate(intermediate_certificate_name)
 
+    def fetch_intermediate_private_path_from_name(self, name):
+        return self.CA_INTERMEDIATE_PATH + "/" + name + "/private/"
 
+    def fetch_intermediate_path_from_name(self, name):
+        return self.CA_INTERMEDIATE_PATH + "/" + name + "/"
 
     def dump_ecdsa_intermediate_key_parameters(self, name):
         self.l.info("Entering dump_intermediate_ecdsa_parameters")
-        intermediate_private_path = self.CA_INTERMEDIATE_PATH + "/" + name + "/private/"
-        command = CA_OPENSSL_PATH + " ecparam -in " + intermediate_private_path + name + ".pem -text -param_enc_explicit -noout"
+        command = CA_OPENSSL_PATH + " ecparam -in " + self.fetch_intermediate_private_path_from_name(
+            name) + name + ".pem -text -param_enc explicit -noout"
         self.execute_command(command)
 
     def generate_intermediate_key_parameters(self, name):
         self.l.info("Creating intermediate key for: " + name)
-        command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.CA_INTERMEDIATE_PATH + "/" + name + "/private/" + name + ".pem"
+        command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.fetch_intermediate_private_path_from_name(
+            name) + name + ".pem"
         self.execute_command(command)
 
     def generate_intermediate_key(self, name):
         self.l.info("Generating a key pair for INTERMEDIATE: " + name)
-        intermediate_private_path = self.CA_INTERMEDIATE_PATH + "/" + name + "/private/"
-
-        generate_intermediate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + intermediate_private_path + "/cakey.pem -genkey -name secp384r1 -noout"
-        dump_intermediate_keys_command = CA_OPENSSL_PATH + " ec -in " + intermediate_private_path + "/cakey.pem -text -noout"
+        generate_intermediate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.fetch_intermediate_private_path_from_name(
+            name) + "/cakey.pem -genkey -name secp384r1 -noout"
+        dump_intermediate_keys_command = CA_OPENSSL_PATH + " ec -in " + self.fetch_intermediate_private_path_from_name(
+            name) + "/cakey.pem -text -noout"
         self.execute_command(generate_intermediate_keys_command)
         self.l.info("Listing key file for: " + name)
         self.execute_command(dump_intermediate_keys_command)
 
-    def generate_interemediate_certificate(self, name):
-        self.l.info("Generating intermediate certificate")
-        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.CA_PRIVATE_PATH + "/cakey.pem -config CA/openssl.cnf " + \
-                                            "-days " + str(
-            CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.CA_PRIVATE_PATH + "/cacert.pem -outform PEM"
+    def generate_interemediate_certificate_csr(self, name):
+        self.l.info("Generating intermediate certificate, csr")
+        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.CA_INTERMEDIATE_PATH + "/openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
+            name) + "cakey.pem -days " + str(
+            CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.fetch_intermediate_path_from_name(
+            name) + "csr/intermediate.csr.pem"
+        self.l.debug(generate_certificate_command)
+        self.execute_command(generate_certificate_command)
 
-        self.execute_command(self.generate_certificate_command)
+    # Depends upon generate_intermediate_certificate_csr running before this
+    def generate_intermediate_certificate(self, name):
+        self.l.info("Generating intermediate certificate")
+        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config CA/openssl.cnf -extensions v3_intermediate_ca -days " + str(
+            SUB_CA_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.fetch_intermediate_path_from_name(
+            name) + "csr/intermediate.csr.pem" + " -out " + self.fetch_intermediate_path_from_name(
+            name) + "certs/intermediate.cert.pem"
+        self.l.debug(generate_certificate_command)
+        self.execute_command(generate_certificate_command)
+
+    def verify_intermediate_certificate(self, name):
+        self.l.info("Entering verification")
+        verification_command = CA_OPENSSL_PATH + " verify -CAfile " + self.CA_PRIVATE_PATH + "/cacert.pem" + " " + self.fetch_intermediate_path_from_name(
+            name) + "certs/intermediate.cert.pem"
+        self.execute_command(verification_command)
+
+    def perform_aircraft_certification_generation(self):
+        self.create_aircraft_parameters_and_key()
+        self.generate_aircraft_csr()
+        self.generate_aircraft_certificate()
+        self.validate_airplane_certificate()
+
+
+
+    def create_aircraft_parameters_and_key(self):
+        self.l.info("Generating aircraft key parameters")
+        command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.AIR_CA_PAT_PRIVATE + "airplane.pem"
+        self.execute_command(command)
+
+        self.l.info("Generating a key pair for aircraft")
+        generate_aircraft_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem" + " -genkey -name secp384r1 -noout"
+        self.execute_command(generate_aircraft_keys_command)
+
+    def generate_aircraft_csr(self):
+        self.l.info("Generating certificate request for aircraft")
+        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.CA_INTERMEDIATE_PATH + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem -days " + str(
+            USER_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.AIR_CA_PATH + "csr/airplane.csr.pem"
+        self.execute_command(generate_csr_command)
+
+    def generate_aircraft_certificate(self):
+        self.l.info("Generting aircraft certificate")
+        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + self.AIR_CA_PATH + "openssl.cnf -extensions usr_cert -days " + str(USER_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.AIR_CA_PATH + "csr/airplane.csr.pem" + " -out " + self.AIR_CA_PATH + "certs/airplane.cert.pem"
+        self.l.debug(generate_certificate_command)
+        self.execute_command(generate_certificate_command)
+
+    def validate_airplane_certificate(self):
+        self.execute_command("openssl x509 -noout -text -in CA/intermediate/sub-ca-air/certs/airplane.cert.pem")
+
 
 if __name__ == "__main__":
     certificate_manager = CertificateCreator()
     certificate_manager.perform_ca_certificate_generation()
+    certificate_manager.perform_intermediate_certificate_generation()
+    certificate_manager.perform_aircraft_certification_generation()
