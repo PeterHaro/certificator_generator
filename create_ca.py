@@ -5,27 +5,27 @@ import time
 
 from ca_config import *
 from logger import Logger
-from utility import create_folder_if_not_exists, find_between
+from utility import create_folder_if_not_exists, find_between, create_root_ca_configuration, create_ca_configuration
 
-# TODO : IMplement CA CHAINING: cat CA/intermediate/sub-ca-air/certs/intermediate.cert.pem CA/private/cacert.pem > CA/intermediate/sub-ca-air/certs/ca-chain.cert.pem
+
+# TODO : IMplement CA CHAINING:
 class CertificateCreator(object):
+    ####################LOGGING###############################
     TMP = "./log"
     LOG_FILENAME = TMP + "/%s_%d.log" % (time.strftime("%Y%m%d_%H%M%S"), os.getpid())
     LOG_LEVEL = Logger.ALL
     OUTPUT_FILENAME = TMP + "/output.log"
     OUTPUT_LOGLEVEL = Logger.ALL
-    CA_CERT_PATH = "CA/certs"
-    CA_CRL_PATH = "CA/crl"
-    CA_NEW_CERTS_PATH = "CA/newcerts"
-    CA_PRIVATE_PATH = "CA/private"
-    CA_INTERMEDIATE_PATH = "CA/intermediate"
-    CA_INTERMEDIATE_PATH_PRIVATE = "CA/intermediate/private"
-    CA_USER_PATH = "CA/final_user_certificates"
-    SUB_CA_AIR_IDX = 0
+    ##########################################################
+    CERTS_PATH = "/certs"
+    CRL_PATH = "/crl"
+    NEW_CERTS_PATH = "/newcerts"
+    PRIVATE_PATH = "/private"
+    INTERMEDIATE_PATH = "/intermediate"
     AIR_CA_PATH = "CA/intermediate/sub-ca-air/"
     AIR_CA_PAT_PRIVATE = "CA/intermediate/sub-ca-air/private/"
 
-    def __init__(self):
+    def __init__(self, relative_path_to_ca_root="./CA", root_ca_configuration=None):
         # logging
         self.logfile = open(self.LOG_FILENAME, "a+")
         self.l = Logger(self.logfile, self.LOG_LEVEL, str(os.getpid()))
@@ -33,18 +33,27 @@ class CertificateCreator(object):
         self.output = open(self.OUTPUT_FILENAME, "a+")
         self.l.add_writer(self.output, self.OUTPUT_LOGLEVEL)
 
+        # Paths
+        self.relative_path_to_ca_root = relative_path_to_ca_root
+        self.relative_path_to_the_intermediate_directory = self.relative_path_to_ca_root + self.INTERMEDIATE_PATH
+        self.ca_private_path = self.relative_path_to_ca_root + self.PRIVATE_PATH
+
         # CA parameters
         self.ca_names = ["irisca1", "irisca2"]
-        self.ECDSA_parameters_command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.CA_PRIVATE_PATH + "/curve_secp384r1.pem"
-        self.ECDSA_dump_parameters = CA_OPENSSL_PATH + " ecparam -in " + self.CA_PRIVATE_PATH + "/curve_secp384r1.pem -text -param_enc explicit -noout"
-        self.CA_generate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.CA_PRIVATE_PATH + "/cakey.pem -genkey -name secp384r1 -noout"
-        self.list_key_file_command = CA_OPENSSL_PATH + " ec -in " + self.CA_PRIVATE_PATH + "/cakey.pem -text -noout"
-        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.CA_PRIVATE_PATH + "/cakey.pem -config CA/openssl.cnf " + \
+        if root_ca_configuration is not None:
+            self.root_ca_configuration = root_ca_configuration
+
+        # Hardcoded commands: TODO: Refactor me to a command builder-pattern
+        self.ECDSA_parameters_command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.ca_private_path + "/curve_secp384r1.pem"
+        self.ECDSA_dump_parameters = CA_OPENSSL_PATH + " ecparam -in " + self.ca_private_path + "/curve_secp384r1.pem -text -param_enc explicit -noout"
+        self.CA_generate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.ca_private_path + "/cakey.pem -genkey -name secp384r1 -noout"
+        self.list_key_file_command = CA_OPENSSL_PATH + " ec -in " + self.ca_private_path + "/cakey.pem -text -noout"
+        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.ca_private_path + "/cakey.pem -config CA/openssl.cnf " + \
                                             "-days " + str(
-            CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.CA_PRIVATE_PATH + "/cacert.pem -outform PEM"
-        self.test_certificate_command = CA_OPENSSL_PATH + " x509 -purpose -in " + self.CA_PRIVATE_PATH + "/cacert.pem -inform PEM"
-        self.convert_certificate_to_der_command = CA_OPENSSL_PATH + " x509 -in " + self.CA_PRIVATE_PATH + "/cacert.pem -out " + self.CA_PRIVATE_PATH + "/cacert.der -outform DER"
-        self.dump_ca_certificate_command = CA_OPENSSL_PATH + " x509 -in " + self.CA_PRIVATE_PATH + "/cacert.der -inform DER -text -noout"
+            CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.ca_private_path + "/cacert.pem -outform PEM"
+        self.test_certificate_command = CA_OPENSSL_PATH + " x509 -purpose -in " + self.ca_private_path + "/cacert.pem -inform PEM"
+        self.convert_certificate_to_der_command = CA_OPENSSL_PATH + " x509 -in " + self.ca_private_path + "/cacert.pem -out " + self.ca_private_path + "/cacert.der -outform DER"
+        self.dump_ca_certificate_command = CA_OPENSSL_PATH + " x509 -in " + self.ca_private_path + "/cacert.der -inform DER -text -noout"
 
         # Intermediate parameters
         self.intermediate_ca_names = ["sub-ca-air", "sub-ca-gnd"]
@@ -52,30 +61,41 @@ class CertificateCreator(object):
 
         # Create file structures
         # ROOT CA STRUCTURE
-        create_folder_if_not_exists(self.CA_CERT_PATH)
-        create_folder_if_not_exists(self.CA_CRL_PATH)
-        create_folder_if_not_exists(self.CA_NEW_CERTS_PATH)
-        create_folder_if_not_exists(self.CA_PRIVATE_PATH)
-        with open("CA/index.txt", "w+") as touchFile:
-            pass
-        with open("CA/serial", "w+") as writeFile:
-            writeFile.write("1000")
-
-        # Intermediate file structure
-        create_folder_if_not_exists(self.CA_INTERMEDIATE_PATH)
+        create_folder_if_not_exists(self.TMP)
+        self.create_subfolder_structure_for_a_given_ca(relative_path_to_ca_root, True)
         for sub_ca in self.intermediate_ca_names:
-            sub_ca_path = self.CA_INTERMEDIATE_PATH + "/" + sub_ca
-            create_folder_if_not_exists(sub_ca_path + "/certs")
-            create_folder_if_not_exists(sub_ca_path + "/crl")
-            create_folder_if_not_exists(sub_ca_path + "/csr")
-            create_folder_if_not_exists(sub_ca_path + "/newcerts")
-            create_folder_if_not_exists(sub_ca_path + "/private")
-            with open(sub_ca_path + "/index.txt", "w+") as touchFile:
-                pass
-            with open(sub_ca_path + "/serial", "w+") as writeFile:
+            self.create_subfolder_structure_for_a_given_ca(
+                self.relative_path_to_the_intermediate_directory + "/" + sub_ca, False)
+
+    @staticmethod
+    def build_openssl_command(command, parameters):
+        retval = ""
+        retval += CA_OPENSSL_PATH + " " + command
+        for key, value in parameters.iteritems():
+            retval += " " + key + " " + value
+        return retval
+
+    def create_subfolder_structure_for_a_given_ca(self, ca_path, is_ca):
+        create_folder_if_not_exists(ca_path)
+        create_folder_if_not_exists(ca_path + self.CERTS_PATH)
+        create_folder_if_not_exists(ca_path + self.CRL_PATH)
+        create_folder_if_not_exists(ca_path + self.NEW_CERTS_PATH)
+        create_folder_if_not_exists(ca_path + self.PRIVATE_PATH)
+        with open(ca_path + "/index.txt", "w+") as touchFile:
+            pass
+        with open(ca_path + "/serial", "w+") as writeFile:
+            writeFile.write("1000")
+        if not is_ca:
+            with open(ca_path + "/crlnumber", "w+") as writeFile:
                 writeFile.write("1000")
-            with open(sub_ca_path + "/crlnumber", "w+") as writeFile:
-                writeFile.write("1000")
+            create_folder_if_not_exists(ca_path + "/csr")
+            configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1])
+            configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
+            configuration.write_config_file(should_write_oscp=True)
+        else:
+            create_folder_if_not_exists(self.relative_path_to_the_intermediate_directory)
+            self.root_ca_configuration.add_writer(open(self.relative_path_to_ca_root + "/" + "openssl.cnf", "w+"))
+            self.root_ca_configuration.write_config_file()
 
     def dump_and_fetch_ca_certificate(self, store_output=False):
         self.l.info("Dumping CA certificate")
@@ -155,10 +175,10 @@ class CertificateCreator(object):
             self.verify_intermediate_certificate(intermediate_certificate_name)
 
     def fetch_intermediate_private_path_from_name(self, name):
-        return self.CA_INTERMEDIATE_PATH + "/" + name + "/private/"
+        return self.relative_path_to_the_intermediate_directory + "/" + name + "/private/"
 
     def fetch_intermediate_path_from_name(self, name):
-        return self.CA_INTERMEDIATE_PATH + "/" + name + "/"
+        return self.relative_path_to_the_intermediate_directory + "/" + name + "/"
 
     def dump_ecdsa_intermediate_key_parameters(self, name):
         self.l.info("Entering dump_intermediate_ecdsa_parameters")
@@ -184,7 +204,7 @@ class CertificateCreator(object):
 
     def generate_interemediate_certificate_csr(self, name):
         self.l.info("Generating intermediate certificate, csr")
-        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.CA_INTERMEDIATE_PATH + "/openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
+        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
             name) + "cakey.pem -days " + str(
             CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem"
@@ -203,7 +223,7 @@ class CertificateCreator(object):
 
     def verify_intermediate_certificate(self, name):
         self.l.info("Entering verification")
-        verification_command = CA_OPENSSL_PATH + " verify -CAfile " + self.CA_PRIVATE_PATH + "/cacert.pem" + " " + self.fetch_intermediate_path_from_name(
+        verification_command = CA_OPENSSL_PATH + " verify -CAfile " + self.ca_private_path + "/cacert.pem" + " " + self.fetch_intermediate_path_from_name(
             name) + "certs/intermediate.cert.pem"
         self.execute_command(verification_command)
 
@@ -212,8 +232,6 @@ class CertificateCreator(object):
         self.generate_aircraft_csr()
         self.generate_aircraft_certificate()
         self.validate_airplane_certificate()
-
-
 
     def create_aircraft_parameters_and_key(self):
         self.l.info("Generating aircraft key parameters")
@@ -226,13 +244,14 @@ class CertificateCreator(object):
 
     def generate_aircraft_csr(self):
         self.l.info("Generating certificate request for aircraft")
-        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.CA_INTERMEDIATE_PATH + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem -days " + str(
+        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem -days " + str(
             USER_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.AIR_CA_PATH + "csr/airplane.csr.pem"
         self.execute_command(generate_csr_command)
 
     def generate_aircraft_certificate(self):
         self.l.info("Generting aircraft certificate")
-        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + self.AIR_CA_PATH + "openssl.cnf -extensions usr_cert -days " + str(USER_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.AIR_CA_PATH + "csr/airplane.csr.pem" + " -out " + self.AIR_CA_PATH + "certs/airplane.cert.pem"
+        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + self.AIR_CA_PATH + "openssl.cnf -extensions usr_cert -days " + str(
+            USER_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.AIR_CA_PATH + "csr/airplane.csr.pem" + " -out " + self.AIR_CA_PATH + "certs/airplane.cert.pem"
         self.l.debug(generate_certificate_command)
         self.execute_command(generate_certificate_command)
 
@@ -241,7 +260,7 @@ class CertificateCreator(object):
 
 
 if __name__ == "__main__":
-    certificate_manager = CertificateCreator()
+    certificate_manager = CertificateCreator(root_ca_configuration=create_root_ca_configuration())
     certificate_manager.perform_ca_certificate_generation()
     certificate_manager.perform_intermediate_certificate_generation()
     certificate_manager.perform_aircraft_certification_generation()

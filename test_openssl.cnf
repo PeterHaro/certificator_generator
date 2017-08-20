@@ -3,15 +3,15 @@ default_ca = CA_default
 
 [ CA_default ]
 dir               = .
-certs             = $dir/CA/intermediate/sub-ca-air/certs
-crl_dir           = $dir/CA/intermediate/sub-ca-air/crl
-new_certs_dir     = $dir/CA/intermediate/sub-ca-air/newcerts
-database          = $dir/CA/intermediate/sub-ca-air/index.txt
-serial            = $dir/CA/intermediate/sub-ca-air/serial
+certs             = $dir/CA/certs
+crl_dir           = $dir/CA/crl
+new_certs_dir     = $dir/CA/newcerts
+database          = $dir/CA/index.txt
+serial            = $dir/CA/serial
 RANDFILE          = $dir/CA/private/.rand
 
-private_key       = $dir/CA/intermediate/sub-ca-air/private/cakey.pem
-certificate       = $dir/CA/intermediate/sub-ca-air/certs/intermediate.cert.pem
+private_key       = $dir/CA/private/cakey.pem
+certificate       = $dir/CA/private/cacert.pem
 
 crlnumber         = $dir/CA/crlnumber
 crl               = $dir/CA/crl/ca.crl.pem
@@ -136,10 +136,3 @@ basicConstraints         = critical, CA:true, pathlen:0
 ####################################################################
 [ crl_ext ]
 authorityKeyIdentifier=keyid:always
-
-[ ocsp ]
-basicConstraints = CA:FALSE
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid,issuer
-keyUsage = critical, digitalSignature
-extendedKeyUsage = critical, OCSPSigning
