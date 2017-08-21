@@ -24,7 +24,7 @@ def find_between(s, first, last):
 
 def create_root_ca_configuration():
     root_ca_openssl_configuration = OpensslConfigurationManager()
-    root_ca_openssl_configuration.add_writer(sys.stdout)
+    #root_ca_openssl_configuration.add_writer(sys.stdout)
     strict_policy = OpensslCAPolicy(*OpensslCAPolicy.get_default_policy_strict())
     root_ca_openssl_configuration.add_policy(strict_policy)
 

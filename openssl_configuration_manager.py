@@ -90,19 +90,17 @@ class OpensslConfigurationManager(object):
         self.certificate = "$dir/CA/private/cacert.pem"
 
         # For certificate revocation lists.
-        self.crlnumber = "$dir/CA/crlnumber"
-        self.crl = "$dir/CA/crl/ca.crl.pem"
+        self.crlnumber = "$dir/crlnumber"
+        self.crl = "$dir/crl/ca.crl.pem"
         self.crl_extensions = "crl_ext"
         self.default_crl_days = 30
 
         self.default_days = 1095  # how long to certify for (3 years=1095)
-        self.default_crl_days = 2  # how long before next CRL
         self.default_md = "sha256"  # use public key default MD
         self.preserve = "no"  # keep passed DN ordering
 
         self.name_opt = "ca_default"
         self.cert_opt = "ca_default"
-        self.default_days = 375
         self.preserve = "no"
         self.policy = "policy_loose"
 
@@ -264,7 +262,7 @@ class OpensslConfigurationManager(object):
     def write_crl_extensions(self):
         self.writeline_to_output(self.SECTION_DIVIDER)
         self.writeline_to_output(self.CRL_EXTENSION_HEADER)
-        self.writeline_to_output("authorityKeyIdentifier=keyid:always")
+        self.writeline_to_output("authorityKeyIdentifier = keyid:always")
         self.writeline_to_output("")
 
     def write_oscp(self):
@@ -274,8 +272,19 @@ class OpensslConfigurationManager(object):
         self.writeline_to_output("authorityKeyIdentifier = keyid,issuer")
         self.writeline_to_output("keyUsage = critical, digitalSignature")
         self.writeline_to_output("extendedKeyUsage = critical, OCSPSigning")
+        self.writeline_to_output("")
 
-    def write_config_file(self, default_ca=None, should_write_oscp=False):
+    def write_user_certificate(self):
+        self.writeline_to_output("[ usr_cert ]")
+        self.writeline_to_output("basicConstraints = CA:FALSE")
+        self.writeline_to_output("nsCertType = client, email")
+        self.writeline_to_output('nsComment = "OpenSSL Generated Server Certificate"')
+        self.writeline_to_output("subjectKeyIdentifier = hash")
+        self.writeline_to_output("authorityKeyIdentifier = keyid,issuer")
+        self.writeline_to_output("keyUsage = critical, nonRepudiation, digitalSignature, keyEncipherment")
+        self.writeline_to_output("extendedKeyUsage = clientAuth, emailProtection")
+
+    def write_config_file(self, default_ca=None, should_write_oscp=False, should_write_user_certificate=False):
         if not self.writers:
             self.writers.append(sys.stdout)
         if default_ca is not None:
@@ -291,10 +300,15 @@ class OpensslConfigurationManager(object):
         self.write_crl_extensions()
         if should_write_oscp:
             self.write_oscp()
+        if should_write_user_certificate:
+            self.write_user_certificate()
 
     def add_writer(self, writer):
         self.writers.append(writer)
 
+    def cleanup(self):
+        for writer in self.writers:
+            writer.close()
 
 if __name__ == "__main__":
     configurationManager = OpensslConfigurationManager()

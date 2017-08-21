@@ -91,34 +91,41 @@ class CertificateCreator(object):
             create_folder_if_not_exists(ca_path + "/csr")
             configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1])
             configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
-            configuration.write_config_file(should_write_oscp=True)
+            configuration.write_config_file(should_write_oscp=True, should_write_user_certificate=True)
         else:
             create_folder_if_not_exists(self.relative_path_to_the_intermediate_directory)
             self.root_ca_configuration.add_writer(open(self.relative_path_to_ca_root + "/" + "openssl.cnf", "w+"))
             self.root_ca_configuration.write_config_file()
+            self.root_ca_configuration.cleanup()
 
     def dump_and_fetch_ca_certificate(self, store_output=False):
         self.l.info("Dumping CA certificate")
+        self.l.debug(self.dump_ca_certificate_command)
         self.execute_command(self.dump_ca_certificate_command, store_output)
 
     def convert_certificate_to_der(self):
         self.l.info("Converting certificate to DER")
+        self.l.debug(self.convert_certificate_to_der_command)
         self.execute_command(self.convert_certificate_to_der_command)
 
     def test_certificate(self):
         self.l.info("Testing certificate")
+        self.l.debug(self.test_certificate_command)
         self.execute_command(self.test_certificate_command)
 
     def generate_certificate(self):
         self.l.info("Generating certificate")
+        self.l.debug(self.generate_certificate_command)
         self.execute_command(self.generate_certificate_command)
 
     def dump_ecdsa_parameters(self):
         self.l.info("Entering dump_ecdsa_parameters")
+        self.l.debug(self.ECDSA_dump_parameters)
         self.execute_command(self.ECDSA_dump_parameters)
 
     def generate_ECDSA_parameters(self):
         self.l.info("Entering generate_ECDSAparameters")
+        self.l.debug(self.ECDSA_parameters_command)
         self.execute_command(self.ECDSA_parameters_command)
 
     def generate_root_key(self):
@@ -132,7 +139,7 @@ class CertificateCreator(object):
         output, err = process.communicate()
         if store_output:
             self.lastOperationOutput = output
-        self.l.debug(output)
+        #self.l.debug(output)
         self.l.debug(err)
         if process.returncode:
             self.l.critical('FAILURE - return code %d' % process.returncode)
@@ -204,11 +211,11 @@ class CertificateCreator(object):
 
     def generate_interemediate_certificate_csr(self, name):
         self.l.info("Generating intermediate certificate, csr")
-        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
+        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.fetch_intermediate_path_from_name(name) + "/openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
             name) + "cakey.pem -days " + str(
             CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem"
-        self.l.debug(generate_certificate_command)
+       # self.l.debug(generate_certificate_command)
         self.execute_command(generate_certificate_command)
 
     # Depends upon generate_intermediate_certificate_csr running before this
@@ -218,7 +225,7 @@ class CertificateCreator(object):
             SUB_CA_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem" + " -out " + self.fetch_intermediate_path_from_name(
             name) + "certs/intermediate.cert.pem"
-        self.l.debug(generate_certificate_command)
+       # self.l.debug(generate_certificate_command)
         self.execute_command(generate_certificate_command)
 
     def verify_intermediate_certificate(self, name):
@@ -244,7 +251,7 @@ class CertificateCreator(object):
 
     def generate_aircraft_csr(self):
         self.l.info("Generating certificate request for aircraft")
-        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem -days " + str(
+        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/sub-ca-air" + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem -days " + str(
             USER_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.AIR_CA_PATH + "csr/airplane.csr.pem"
         self.execute_command(generate_csr_command)
 
