@@ -2,8 +2,16 @@ import errno
 import os
 import sys
 
+import psutil as psutil
+
 from openssl_configuration_manager import OpensslConfigurationManager, OpensslCAPolicy, OpensslSigningRequest
 
+
+def kill_process(proc_pid):
+    process = psutil.Process(proc_pid)
+    for proc in process.children(recursive=True):
+        proc.kill()
+    process.kill()
 
 def create_folder_if_not_exists(directory):
     try:
@@ -75,7 +83,7 @@ def create_ca_configuration(sub_ca_name):
     root_ca_openssl_configuration.private_key = "$dir/CA/intermediate/" + sub_ca_name + "/private/cakey.pem"
     root_ca_openssl_configuration.certificate = "$dir/CA/intermediate/" + sub_ca_name + "/certs/intermediate.cert.pem"
 
-    root_ca_openssl_configuration.add_writer(sys.stdout)
+    #root_ca_openssl_configuration.add_writer(sys.stdout)
     strict_policy = OpensslCAPolicy(*OpensslCAPolicy.get_default_policy_strict())
     root_ca_openssl_configuration.add_policy(strict_policy)
 

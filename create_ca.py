@@ -3,9 +3,12 @@ import subprocess
 import sys
 import time
 
+import signal
+
 from ca_config import *
 from logger import Logger
-from utility import create_folder_if_not_exists, find_between, create_root_ca_configuration, create_ca_configuration
+from utility import create_folder_if_not_exists, find_between, create_root_ca_configuration, create_ca_configuration, \
+    kill_process
 
 
 # TODO : IMplement CA CHAINING:
@@ -62,10 +65,11 @@ class CertificateCreator(object):
         # Create file structures
         # ROOT CA STRUCTURE
         create_folder_if_not_exists(self.TMP)
-        self.create_subfolder_structure_for_a_given_ca(relative_path_to_ca_root, True)
-        for sub_ca in self.intermediate_ca_names:
-            self.create_subfolder_structure_for_a_given_ca(
-                self.relative_path_to_the_intermediate_directory + "/" + sub_ca, False)
+        if root_ca_configuration is not None:
+            self.create_subfolder_structure_for_a_given_ca(relative_path_to_ca_root, True)
+            for sub_ca in self.intermediate_ca_names:
+                self.create_subfolder_structure_for_a_given_ca(
+                    self.relative_path_to_the_intermediate_directory + "/" + sub_ca, False)
 
     @staticmethod
     def build_openssl_command(command, parameters):
@@ -92,6 +96,7 @@ class CertificateCreator(object):
             configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1])
             configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
             configuration.write_config_file(should_write_oscp=True, should_write_user_certificate=True)
+            configuration.cleanup()
         else:
             create_folder_if_not_exists(self.relative_path_to_the_intermediate_directory)
             self.root_ca_configuration.add_writer(open(self.relative_path_to_ca_root + "/" + "openssl.cnf", "w+"))
@@ -130,20 +135,26 @@ class CertificateCreator(object):
 
     def generate_root_key(self):
         self.l.info("Generating a key pair for CA")
+        self.l.debug(self.CA_generate_keys_command)
         self.execute_command(self.CA_generate_keys_command)
         self.l.info("Listing key file")
-        self.execute_command(self.list_key_file_command)
+        self.l.debug(self.list_key_file_command)
+        self.execute_command(self.list_key_file_command, debug=True)
 
-    def execute_command(self, command, store_output=False):
+    def execute_command(self, command, store_output=False, debug=False):
         process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = process.communicate()
         if store_output:
             self.lastOperationOutput = output
         #self.l.debug(output)
-        self.l.debug(err)
+        #self.l.debug(err)
+        if debug:
+            self.l.debug(output)
+            self.l.debug(err)
         if process.returncode:
             self.l.critical('FAILURE - return code %d' % process.returncode)
             sys.exit(-1)
+        process.terminate() #For some reason this does not help!
 
     # Vertification
     def validate_ca_certificate_entries(self):
@@ -192,31 +203,36 @@ class CertificateCreator(object):
         command = CA_OPENSSL_PATH + " ecparam -in " + self.fetch_intermediate_private_path_from_name(
             name) + name + ".pem -text -param_enc explicit -noout"
         self.execute_command(command)
+        self.l.info(command)
 
     def generate_intermediate_key_parameters(self, name):
         self.l.info("Creating intermediate key for: " + name)
         command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.fetch_intermediate_private_path_from_name(
             name) + name + ".pem"
         self.execute_command(command)
+        self.l.info(command)
 
     def generate_intermediate_key(self, name):
         self.l.info("Generating a key pair for INTERMEDIATE: " + name)
         generate_intermediate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.fetch_intermediate_private_path_from_name(
-            name) + "/cakey.pem -genkey -name secp384r1 -noout"
+            name) + "cakey.pem -genkey -name secp384r1 -noout"
         dump_intermediate_keys_command = CA_OPENSSL_PATH + " ec -in " + self.fetch_intermediate_private_path_from_name(
-            name) + "/cakey.pem -text -noout"
+            name) + "cakey.pem -text -noout"
         self.execute_command(generate_intermediate_keys_command)
+        self.l.info(generate_intermediate_keys_command)
         self.l.info("Listing key file for: " + name)
         self.execute_command(dump_intermediate_keys_command)
+        self.l.info(dump_intermediate_keys_command)
 
     def generate_interemediate_certificate_csr(self, name):
         self.l.info("Generating intermediate certificate, csr")
-        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.fetch_intermediate_path_from_name(name) + "/openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
+        generate_certificate_command = CA_OPENSSL_PATH + " req -batch -config " + self.fetch_intermediate_path_from_name(name) + "openssl.cnf -new -sha256 -key " + self.fetch_intermediate_private_path_from_name(
             name) + "cakey.pem -days " + str(
             CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem"
        # self.l.debug(generate_certificate_command)
         self.execute_command(generate_certificate_command)
+        self.l.info(generate_certificate_command)
 
     # Depends upon generate_intermediate_certificate_csr running before this
     def generate_intermediate_certificate(self, name):
@@ -225,7 +241,7 @@ class CertificateCreator(object):
             SUB_CA_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem" + " -out " + self.fetch_intermediate_path_from_name(
             name) + "certs/intermediate.cert.pem"
-       # self.l.debug(generate_certificate_command)
+        self.l.debug(generate_certificate_command)
         self.execute_command(generate_certificate_command)
 
     def verify_intermediate_certificate(self, name):
@@ -233,6 +249,7 @@ class CertificateCreator(object):
         verification_command = CA_OPENSSL_PATH + " verify -CAfile " + self.ca_private_path + "/cacert.pem" + " " + self.fetch_intermediate_path_from_name(
             name) + "certs/intermediate.cert.pem"
         self.execute_command(verification_command)
+        self.l.info(verification_command)
 
     def perform_aircraft_certification_generation(self):
         self.create_aircraft_parameters_and_key()
@@ -244,16 +261,19 @@ class CertificateCreator(object):
         self.l.info("Generating aircraft key parameters")
         command = CA_OPENSSL_PATH + " ecparam -name secp384r1 -out " + self.AIR_CA_PAT_PRIVATE + "airplane.pem"
         self.execute_command(command)
+        self.l.info(command)
 
         self.l.info("Generating a key pair for aircraft")
-        generate_aircraft_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem" + " -genkey -name secp384r1 -noout"
+        generate_aircraft_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.AIR_CA_PAT_PRIVATE + "airplane.pem" + " -genkey -name secp384r1 -noout"
         self.execute_command(generate_aircraft_keys_command)
+        self.l.info(generate_aircraft_keys_command)
 
     def generate_aircraft_csr(self):
         self.l.info("Generating certificate request for aircraft")
-        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/sub-ca-air" + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "/airplane.pem -days " + str(
+        generate_csr_command = CA_OPENSSL_PATH + " req -batch -config " + self.relative_path_to_the_intermediate_directory + "/sub-ca-air" + "/openssl.cnf -new -sha256 -key " + self.AIR_CA_PAT_PRIVATE + "airplane.pem -days " + str(
             USER_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.AIR_CA_PATH + "csr/airplane.csr.pem"
         self.execute_command(generate_csr_command)
+        self.l.info(generate_csr_command)
 
     def generate_aircraft_certificate(self):
         self.l.info("Generting aircraft certificate")
@@ -261,6 +281,7 @@ class CertificateCreator(object):
             USER_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.AIR_CA_PATH + "csr/airplane.csr.pem" + " -out " + self.AIR_CA_PATH + "certs/airplane.cert.pem"
         self.l.debug(generate_certificate_command)
         self.execute_command(generate_certificate_command)
+        self.l.info(generate_certificate_command)
 
     def validate_airplane_certificate(self):
         self.execute_command("openssl x509 -noout -text -in CA/intermediate/sub-ca-air/certs/airplane.cert.pem")
