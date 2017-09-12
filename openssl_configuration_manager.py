@@ -78,16 +78,16 @@ class OpensslConfigurationManager(object):
         ##############################################################################################
         self.default_ca = "CA_default"
         self.dir = "."
-        self.certs = "$dir/CA/certs"
-        self.crl_dir = "$dir/CA/crl"
-        self.new_certs_dir = "$dir/CA/newcerts"
-        self.database = "$dir/CA/index.txt"
-        self.serial = "$dir/CA/serial"
-        self.randfile = "$dir/CA/private/.rand"
+        self.certs = "$dir/certs"
+        self.crl_dir = "$dir/crl"
+        self.new_certs_dir = "$dir/newcerts"
+        self.database = "$dir/index.txt"
+        self.serial = "$dir/serial"
+        self.randfile = "$dir/private/.rand"
 
         # The root key and root certificate.
-        self.private_key = "$dir/CA/private/cakey.pem"
-        self.certificate = "$dir/CA/private/cacert.pem"
+        self.private_key = "$dir/private/cakey.pem"
+        self.certificate = "$dir/private/cacert.pem"
 
         # For certificate revocation lists.
         self.crlnumber = "$dir/crlnumber"
