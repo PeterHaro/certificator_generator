@@ -148,3 +148,5 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+CA

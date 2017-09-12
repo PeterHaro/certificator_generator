@@ -30,9 +30,11 @@ def find_between(s, first, last):
         return ""
 
 
-def create_root_ca_configuration():
+def create_root_ca_configuration(relative_path_to_root=""):
     root_ca_openssl_configuration = OpensslConfigurationManager()
     #root_ca_openssl_configuration.add_writer(sys.stdout)
+    if relative_path_to_root != "":
+        root_ca_openssl_configuration.dir = os.path.join('.', relative_path_to_root)
     strict_policy = OpensslCAPolicy(*OpensslCAPolicy.get_default_policy_strict())
     root_ca_openssl_configuration.add_policy(strict_policy)
 
@@ -73,15 +75,17 @@ def create_root_ca_configuration():
     return root_ca_openssl_configuration
 
 
-def create_ca_configuration(sub_ca_name):
+def create_ca_configuration(sub_ca_name, relative_path_to_root=""):
     root_ca_openssl_configuration = OpensslConfigurationManager()
-    root_ca_openssl_configuration.certs = "$dir/CA/intermediate/" + sub_ca_name + "/certs"
-    root_ca_openssl_configuration.crl_dir = "$dir/CA/intermediate/" + sub_ca_name + "/crl"
-    root_ca_openssl_configuration.new_certs_dir = "$dir/CA/intermediate/" + sub_ca_name + "/newcerts"
-    root_ca_openssl_configuration.database = "$dir/CA/intermediate/" + sub_ca_name + "/index.txt"
-    root_ca_openssl_configuration.serial = "$dir/CA/intermediate/" + sub_ca_name + "/serial"
-    root_ca_openssl_configuration.private_key = "$dir/CA/intermediate/" + sub_ca_name + "/private/cakey.pem"
-    root_ca_openssl_configuration.certificate = "$dir/CA/intermediate/" + sub_ca_name + "/certs/intermediate.cert.pem"
+    if relative_path_to_root != "":
+        root_ca_openssl_configuration.dir = os.path.join('.', relative_path_to_root)
+    root_ca_openssl_configuration.certs = "$dir/intermediate/" + sub_ca_name + "/certs"
+    root_ca_openssl_configuration.crl_dir = "$dir/intermediate/" + sub_ca_name + "/crl"
+    root_ca_openssl_configuration.new_certs_dir = "$dir/intermediate/" + sub_ca_name + "/newcerts"
+    root_ca_openssl_configuration.database = "$dir/intermediate/" + sub_ca_name + "/index.txt"
+    root_ca_openssl_configuration.serial = "$dir/intermediate/" + sub_ca_name + "/serial"
+    root_ca_openssl_configuration.private_key = "$dir/intermediate/" + sub_ca_name + "/private/cakey.pem"
+    root_ca_openssl_configuration.certificate = "$dir/intermediate/" + sub_ca_name + "/certs/intermediate.cert.pem"
 
     #root_ca_openssl_configuration.add_writer(sys.stdout)
     strict_policy = OpensslCAPolicy(*OpensslCAPolicy.get_default_policy_strict())

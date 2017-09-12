@@ -2,6 +2,7 @@
 import subprocess
 import sys
 import time
+import os
 
 import signal
 
@@ -30,6 +31,7 @@ class CertificateCreator(object):
 
     def __init__(self, relative_path_to_ca_root="./CA", root_ca_configuration=None):
         # logging
+        os.makedirs(TMP, exist_ok=True)
         self.logfile = open(self.LOG_FILENAME, "a+")
         self.l = Logger(self.logfile, self.LOG_LEVEL, str(os.getpid()))
         self.l.add_writer(sys.stdout, self.LOG_LEVEL)
@@ -51,7 +53,7 @@ class CertificateCreator(object):
         self.ECDSA_dump_parameters = CA_OPENSSL_PATH + " ecparam -in " + self.ca_private_path + "/curve_secp384r1.pem -text -param_enc explicit -noout"
         self.CA_generate_keys_command = CA_OPENSSL_PATH + " ecparam -out " + self.ca_private_path + "/cakey.pem -genkey -name secp384r1 -noout"
         self.list_key_file_command = CA_OPENSSL_PATH + " ec -in " + self.ca_private_path + "/cakey.pem -text -noout"
-        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.ca_private_path + "/cakey.pem -config CA/openssl.cnf " + \
+        self.generate_certificate_command = CA_OPENSSL_PATH + " req -new -batch -x509 -sha256 -key " + self.ca_private_path + "/cakey.pem -config " + os.path.join(self.relative_path_to_ca_root, 'openssl.cnf') + " " + \
                                             "-days " + str(
             CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.ca_private_path + "/cacert.pem -outform PEM"
         self.test_certificate_command = CA_OPENSSL_PATH + " x509 -purpose -in " + self.ca_private_path + "/cacert.pem -inform PEM"
@@ -93,7 +95,7 @@ class CertificateCreator(object):
             with open(ca_path + "/crlnumber", "w+") as writeFile:
                 writeFile.write("1000")
             create_folder_if_not_exists(ca_path + "/csr")
-            configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1])
+            configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1], self.relative_path_to_ca_root)
             configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
             configuration.write_config_file(should_write_oscp=True, should_write_user_certificate=True)
             configuration.cleanup()
@@ -237,7 +239,7 @@ class CertificateCreator(object):
     # Depends upon generate_intermediate_certificate_csr running before this
     def generate_intermediate_certificate(self, name):
         self.l.info("Generating intermediate certificate")
-        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config CA/openssl.cnf -extensions v3_intermediate_ca -days " + str(
+        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + os.path.join(self.relative_path_to_ca_root, 'openssl.cnf') + " -extensions v3_intermediate_ca -days " + str(
             SUB_CA_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem" + " -out " + self.fetch_intermediate_path_from_name(
             name) + "certs/intermediate.cert.pem"
