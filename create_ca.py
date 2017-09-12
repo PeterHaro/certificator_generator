@@ -2,6 +2,7 @@
 import subprocess
 import sys
 import time
+import os
 
 import signal
 
@@ -30,6 +31,7 @@ class CertificateCreator(object):
 
     def __init__(self, relative_path_to_ca_root="./CA", root_ca_configuration=None):
         # logging
+        os.makedirs(TMP, exist_ok=True)
         self.logfile = open(self.LOG_FILENAME, "a+")
         self.l = Logger(self.logfile, self.LOG_LEVEL, str(os.getpid()))
         self.l.add_writer(sys.stdout, self.LOG_LEVEL)
