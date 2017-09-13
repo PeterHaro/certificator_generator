@@ -149,15 +149,14 @@ class CertificateCreator(object):
         output, err = process.communicate()
         if store_output:
             self.lastOperationOutput = output
-        #self.l.debug(output)
-        #self.l.debug(err)
         if debug:
             self.l.debug(output)
             self.l.debug(err)
         if process.returncode:
             self.l.critical('FAILURE - return code %d' % process.returncode)
             sys.exit(-1)
-        process.terminate() #For some reason this does not help!
+        if os.name == "nt":
+            process.terminate() #For some reason this does not help!
 
     # Vertification
     def validate_ca_certificate_entries(self):
@@ -240,7 +239,7 @@ class CertificateCreator(object):
     # Depends upon generate_intermediate_certificate_csr running before this
     def generate_intermediate_certificate(self, name):
         self.l.info("Generating intermediate certificate")
-        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + os.path.join(self.relative_path_to_ca_root, 'openssl.cnf') + " -extensions v3_intermediate_ca -days " + str(
+        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + self.relative_path_to_ca_root + "/" + "openssl.cnf" + " -extensions v3_intermediate_ca -days " + str(
             SUB_CA_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem" + " -out " + self.fetch_intermediate_path_from_name(
             name) + "certs/intermediate.cert.pem"
@@ -291,7 +290,7 @@ class CertificateCreator(object):
 
 
 if __name__ == "__main__":
-    certificate_manager = CertificateCreator(root_ca_configuration=create_root_ca_configuration())
+    certificate_manager = CertificateCreator(root_ca_configuration=create_root_ca_configuration("CA/"))
     certificate_manager.perform_ca_certificate_generation()
     certificate_manager.perform_intermediate_certificate_generation()
     certificate_manager.perform_aircraft_certification_generation()
