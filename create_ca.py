@@ -286,7 +286,7 @@ class CertificateCreator(object):
         self.l.info(generate_certificate_command)
 
     def validate_airplane_certificate(self):
-        self.execute_command("openssl x509 -noout -text -in CA/intermediate/sub-ca-air/certs/airplane.cert.pem")
+        self.execute_command(CA_OPENSSL_PATH +  " x509 -noout -text -in CA/intermediate/sub-ca-air/certs/airplane.cert.pem")
 
 
 if __name__ == "__main__":
