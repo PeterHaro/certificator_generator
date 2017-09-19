@@ -65,6 +65,7 @@ def create_signing_air():
     request.set_signing_request_parameters("1.3.6.1.4.1.842.9999.1")
     return request
 
+
 def create_root_ca_configuration(relative_path_to_root=""):
     root_ca_openssl_configuration = OpensslConfigurationManager()
     # root_ca_openssl_configuration.add_writer(sys.stdout)

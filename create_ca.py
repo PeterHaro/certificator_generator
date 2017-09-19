@@ -96,10 +96,11 @@ class CertificateCreator(object):
             with open(ca_path + "/crlnumber", "w+") as writeFile:
                 writeFile.write("1000")
             create_folder_if_not_exists(ca_path + "/csr")
-            #configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1], self.relative_path_to_ca_root)
-            #configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
-            #configuration.write_config_file(should_write_oscp=True, should_write_user_certificate=True)
-            #configuration.cleanup()
+            configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1], self.relative_path_to_ca_root)
+            configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
+            configuration.policy = "signing_policy_air"
+            configuration.write_config_file()
+            configuration.cleanup()
         else:
             create_folder_if_not_exists(self.relative_path_to_the_intermediate_directory)
             self.root_ca_configuration.add_writer(open(self.relative_path_to_ca_root + "/" + "openssl.cnf", "w+"))
