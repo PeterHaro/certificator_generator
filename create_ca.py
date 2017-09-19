@@ -96,10 +96,10 @@ class CertificateCreator(object):
             with open(ca_path + "/crlnumber", "w+") as writeFile:
                 writeFile.write("1000")
             create_folder_if_not_exists(ca_path + "/csr")
-            configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1], self.relative_path_to_ca_root)
-            configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
-            configuration.write_config_file(should_write_oscp=True, should_write_user_certificate=True)
-            configuration.cleanup()
+            #configuration = create_ca_configuration(ca_path.rsplit("/", 1)[-1], self.relative_path_to_ca_root)
+            #configuration.add_writer(open(ca_path + "/" + "openssl.cnf", "w+"))
+            #configuration.write_config_file(should_write_oscp=True, should_write_user_certificate=True)
+            #configuration.cleanup()
         else:
             create_folder_if_not_exists(self.relative_path_to_the_intermediate_directory)
             self.root_ca_configuration.add_writer(open(self.relative_path_to_ca_root + "/" + "openssl.cnf", "w+"))
@@ -232,9 +232,8 @@ class CertificateCreator(object):
             name) + "cakey.pem -days " + str(
             CA_ROOT_CERTIFICATE_VALIDITY_DAYS) + " -out " + self.fetch_intermediate_path_from_name(
             name) + "csr/intermediate.csr.pem"
-       # self.l.debug(generate_certificate_command)
-        self.execute_command(generate_certificate_command)
-        self.l.info(generate_certificate_command)
+        self.l.debug(generate_certificate_command)
+        self.execute_command(generate_certificate_command, debug=True)
 
     # Depends upon generate_intermediate_certificate_csr running before this
     def generate_intermediate_certificate(self, name):
@@ -279,11 +278,11 @@ class CertificateCreator(object):
 
     def generate_aircraft_certificate(self):
         self.l.info("Generting aircraft certificate")
-        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + self.AIR_CA_PATH + "openssl.cnf -extensions usr_cert -days " + str(
+        generate_certificate_command = CA_OPENSSL_PATH + " ca -batch -config " + self.AIR_CA_PATH + "openssl.cnf -extensions signing_req -days " + str(
             USER_CERTIFICATE_VALIDITY_DAYS) + " -notext -md sha256 -in " + self.AIR_CA_PATH + "csr/airplane.csr.pem" + " -out " + self.AIR_CA_PATH + "certs/airplane.cert.pem"
         self.l.debug(generate_certificate_command)
-        self.execute_command(generate_certificate_command)
-        self.l.info(generate_certificate_command)
+        self.execute_command(generate_certificate_command, debug=True)
+        #self.l.info(generate_certificate_command)
 
     def validate_airplane_certificate(self):
         self.execute_command(CA_OPENSSL_PATH +  " x509 -noout -text -in CA/intermediate/sub-ca-air/certs/airplane.cert.pem")

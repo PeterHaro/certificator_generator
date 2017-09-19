@@ -36,14 +36,17 @@ class OpensslCAPolicy(object):
         else:
             self.fields = fields
 
-    def set_policy_parameters(self, country_name, state_or_province_name, organization_name, organizational_unit_name,
-                              common_name, email_address):
+    def set_policy_parameters(self, country_name="optional", state_or_province_name="optional",
+                              organization_name="optional", organizational_unit_name="optional",
+                              common_name="optional", email_address="optional", serial_number=None):
         self.fields["countryName"] = country_name
         self.fields["stateOrProvinceName"] = state_or_province_name
         self.fields["organizationName"] = organization_name
         self.fields["organizationalUnitName"] = organizational_unit_name
         self.fields["commonName"] = common_name
         self.fields["emailAddress"] = email_address
+        if serial_number is not None:
+            self.fields["serialNumber"] = serial_number
 
     @staticmethod
     def get_default_policy_strict():
@@ -310,44 +313,6 @@ class OpensslConfigurationManager(object):
         for writer in self.writers:
             writer.close()
 
+
 if __name__ == "__main__":
-    configurationManager = OpensslConfigurationManager()
-    configurationManager.add_writer(sys.stdout)
-    configurationManager.add_writer(open("test_openssl.cnf", "w+"))
-    strictPolicy = OpensslCAPolicy(*OpensslCAPolicy.get_default_policy_strict())
-    configurationManager.add_policy(strictPolicy)
-
-    signingPolicyAir = OpensslCAPolicy("signing_policy_air")
-    signingPolicyAir.set_policy_parameters("optional", "optional", "optional", "optional", "supplied", "optional")
-    configurationManager.add_policy(signingPolicyAir)
-
-    signingPolicyGround = OpensslCAPolicy("signing_policy_gnd")
-    signingPolicyGround.set_policy_parameters("optional", "optional", "optional", "optional", "supplied", "optional")
-    configurationManager.add_policy(signingPolicyGround)
-
-    signingPolicyCertificate = OpensslCAPolicy("signing_policy_ser")
-    signingPolicyCertificate.set_policy_parameters("optional", "optional", "optional", "supplied", "optional",
-                                                   "supplied")
-    configurationManager.add_policy(signingPolicyCertificate)
-
-    loosePolicy = OpensslCAPolicy(*OpensslCAPolicy.get_default_policy_loose())
-    configurationManager.add_policy(loosePolicy)
-
-    defaultSigningRequest = OpensslSigningRequest("signing_req")
-    defaultSigningRequest.set_signing_request_parameters()
-    configurationManager.add_signing_request(defaultSigningRequest)
-
-    signingGroundRequest = OpensslSigningRequest("signing_gnd")
-    signingGroundRequest.set_signing_request_parameters(extended_key_usage="1.3.6.1.4.1.842.9999.2")
-    configurationManager.add_signing_request(signingGroundRequest)
-
-    signingAirRequest = OpensslSigningRequest("signing_air")
-    signingAirRequest.set_signing_request_parameters(extended_key_usage="1.3.6.1.4.1.842.9999.1")
-    configurationManager.add_signing_request(signingAirRequest)
-
-    intermediateCASigningRequest = OpensslSigningRequest("v3_intermediate_ca")
-    intermediateCASigningRequest.set_signing_request_parameters(authority_key_identifier="keyid:always,issuer",
-                                                                basic_constraints="critical, CA:true, pathlen:0",
-                                                                key_usage="critical, digitalSignature, cRLSign, keyCertSign")
-    configurationManager.add_signing_request(intermediateCASigningRequest)
-    configurationManager.write_config_file()
+    pass
